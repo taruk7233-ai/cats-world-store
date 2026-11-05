@@ -9,44 +9,39 @@ const products = [
     name: "Luxury Cat Collar",
     category: "Collars",
     price: 35,
-    image:
-      "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600",
+    image: "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600",
   },
   {
     id: 2,
     name: "Cute Cat Toy",
     category: "Toys",
     price: 25,
-    image:
-      "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600",
+    image: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600",
   },
   {
     id: 3,
     name: "Premium Cat Bed",
     category: "Accessories",
     price: 89,
-    image:
-      "https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?w=600",
+    image: "https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?w=600",
   },
   {
     id: 4,
     name: "Royal Cat Collection",
     category: "Clothing",
     price: 55,
-    image:
-      "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=600",
+    image: "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=600",
   },
 ];
 
 export default function Home() {
   const [cart, setCart] = useState<Record<number, number>>({});
   const [cartLoaded, setCartLoaded] = useState(false);
-  const [showCart, setShowCart] = useState(false);
   const [addedProduct, setAddedProduct] = useState<number | null>(null);
   const [toast, setToast] = useState("");
   const [search, setSearch] = useState("");
 
-  // Load saved cart when the website opens
+  // Load saved cart
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem("cats-world-cart");
@@ -77,23 +72,24 @@ export default function Home() {
         }
       }
     } catch {
-      console.error("Could not load saved cart.");
+      console.error("Could not load saved cart");
     }
 
     setCartLoaded(true);
   }, []);
 
-  // Save cart whenever it changes
+  // Save cart automatically
   useEffect(() => {
     if (!cartLoaded) return;
 
     try {
       localStorage.setItem("cats-world-cart", JSON.stringify(cart));
     } catch {
-      console.error("Could not save cart.");
+      console.error("Could not save cart");
     }
   }, [cart, cartLoaded]);
 
+  // Add product
   const addToCart = (id: number) => {
     setCart((old) => ({
       ...old,
@@ -111,32 +107,13 @@ export default function Home() {
     }, 1800);
   };
 
-  const changeQuantity = (id: number, amount: number) => {
-    setCart((old) => {
-      const next = { ...old };
-      const quantity = (next[id] || 0) + amount;
-
-      if (quantity <= 0) {
-        delete next[id];
-      } else {
-        next[id] = quantity;
-      }
-
-      return next;
-    });
-  };
-
+  // Cart count
   const totalItems = Object.values(cart).reduce(
     (sum, quantity) => sum + quantity,
     0
   );
 
-  const totalPrice = products.reduce(
-    (sum, product) =>
-      sum + product.price * (cart[product.id] || 0),
-    0
-  );
-
+  // Search
   const filteredProducts = products.filter((product) =>
     product.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -153,7 +130,7 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-[#fffaf4]/95 backdrop-blur border-b border-[#eadbd2]">
         <div className="max-w-7xl mx-auto px-5 py-4 flex justify-between items-center">
 
-          <a href="#" className="text-2xl font-serif font-bold text-[#641e32]">
+          <a href="/" className="text-2xl font-serif font-bold text-[#641e32]">
             Cat’s World<span className="text-[#c69b59]">.</span>
             <p className="text-[9px] tracking-[4px] text-[#987c70] text-center">
               PREMIUM PET STORE
@@ -161,22 +138,24 @@ export default function Home() {
           </a>
 
           <nav className="hidden md:flex gap-8 text-sm">
-            <a href="#">Home</a>
+            <a href="/">Home</a>
             <a href="#shop">Shop</a>
             <a href="#categories">Categories</a>
             <a href="#about">About Us</a>
           </nav>
 
-          <button
-            onClick={() => setShowCart(true)}
+          {/* Cart Page Link */}
+          <a
+            href="/cart"
             className="relative text-2xl"
             aria-label="Open shopping cart"
           >
             🛍️
+
             <span className="absolute -top-2 -right-3 bg-[#641e32] text-white rounded-full text-[10px] w-5 h-5 flex items-center justify-center">
-              {totalItems}
+              {cartLoaded ? totalItems : 0}
             </span>
-          </button>
+          </a>
 
         </div>
       </header>
@@ -228,6 +207,7 @@ export default function Home() {
             <p className="text-[#a77b45] text-xs tracking-[4px]">
               EXPLORE
             </p>
+
             <h2 className="font-serif text-3xl md:text-4xl text-[#641e32] mt-2">
               Shop By Category
             </h2>
@@ -246,9 +226,11 @@ export default function Home() {
                 className="bg-[#fffaf4] p-7 text-center hover:-translate-y-1 transition shadow-sm"
               >
                 <span className="text-4xl">{emoji}</span>
+
                 <h3 className="font-serif text-lg text-[#641e32] mt-3">
                   {name}
                 </h3>
+
                 <p className="text-xs text-[#987c70] mt-1">
                   Explore Collection →
                 </p>
@@ -268,6 +250,7 @@ export default function Home() {
             <p className="text-[#a77b45] text-xs tracking-[4px]">
               OUR SELECTION
             </p>
+
             <h2 className="font-serif text-3xl md:text-4xl text-[#641e32] mt-2">
               Best Sellers
             </h2>
@@ -337,7 +320,10 @@ export default function Home() {
       </section>
 
       {/* About */}
-      <section id="about" className="bg-[#641e32] text-white text-center py-16 px-5">
+      <section
+        id="about"
+        className="bg-[#641e32] text-white text-center py-16 px-5"
+      >
 
         <p className="text-[#d7b57e] tracking-[4px] text-xs">
           OUR PROMISE
@@ -378,155 +364,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Shopping Cart Drawer */}
-      {showCart && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50"
-          onClick={() => setShowCart(false)}
-        >
-
-          <div
-            className="absolute right-0 top-0 h-full w-full max-w-md bg-[#fffaf4] p-6 overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-
-            <div className="flex justify-between items-center border-b border-[#eadbd2] pb-5">
-
-              <h2 className="font-serif text-2xl text-[#641e32]">
-                Your Shopping Bag ({totalItems})
-              </h2>
-
-              <button
-                onClick={() => setShowCart(false)}
-                className="text-3xl"
-                aria-label="Close cart"
-              >
-                ×
-              </button>
-
-            </div>
-
-            {totalItems === 0 ? (
-
-              <div className="text-center py-20">
-
-                <p className="text-5xl">🛍️</p>
-
-                <p className="font-serif text-xl mt-5">
-                  Your bag is empty
-                </p>
-
-                <button
-                  onClick={() => setShowCart(false)}
-                  className="mt-5 bg-[#641e32] text-white px-6 py-3"
-                >
-                  Continue Shopping
-                </button>
-
-              </div>
-
-            ) : (
-
-              <>
-
-                <div className="py-5 space-y-5">
-
-                  {products
-                    .filter((p) => cart[p.id])
-                    .map((p) => (
-
-                      <div key={p.id} className="flex gap-4 items-center">
-
-                        <img
-                          src={p.image}
-                          alt={p.name}
-                          className="w-20 h-20 object-cover"
-                        />
-
-                        <div className="flex-1">
-
-                          <h3 className="font-serif">
-                            {p.name}
-                          </h3>
-
-                          <p className="text-[#641e32] font-semibold">
-                            {p.price} SAR
-                          </p>
-
-                          <div className="flex items-center gap-3 mt-3">
-
-                            <button
-                              onClick={() => changeQuantity(p.id, -1)}
-                              className="border border-[#d8c5b9] px-3 py-1"
-                            >
-                              −
-                            </button>
-
-                            <span>{cart[p.id]}</span>
-
-                            <button
-                              onClick={() => changeQuantity(p.id, 1)}
-                              className="border border-[#d8c5b9] px-3 py-1"
-                            >
-                              +
-                            </button>
-
-                            <button
-                              onClick={() => changeQuantity(p.id, -cart[p.id])}
-                              className="text-xs text-red-700 ml-auto"
-                            >
-                              Remove
-                            </button>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    ))}
-
-                </div>
-
-                <div className="border-t border-[#eadbd2] pt-5">
-
-                  <div className="flex justify-between text-lg font-semibold">
-
-                    <span>Subtotal</span>
-
-                    <span>{totalPrice.toFixed(2)} SAR</span>
-
-                  </div>
-
-                  <p className="text-xs text-[#987c70] mt-2">
-                    Delivery charges calculated at checkout.
-                  </p>
-
-                  <button
-                    onClick={() => alert("Checkout will be connected in the next step.")}
-                    className="w-full bg-[#641e32] text-white py-4 mt-6 tracking-widest hover:bg-[#842b45]"
-                  >
-                    PROCEED TO CHECKOUT
-                  </button>
-
-                  <button
-                    onClick={() => setShowCart(false)}
-                    className="w-full border border-[#641e32] text-[#641e32] py-3 mt-3"
-                  >
-                    CONTINUE SHOPPING
-                  </button>
-
-                </div>
-
-              </>
-
-            )}
-
-          </div>
-
-        </div>
-      )}
-
     </main>
   );
-                              }
+      }
