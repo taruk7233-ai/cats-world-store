@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const products = [
   {
@@ -9,37 +9,90 @@ const products = [
     name: "Luxury Cat Collar",
     category: "Collars",
     price: 35,
-    image: "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600",
+    image:
+      "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600",
   },
   {
     id: 2,
     name: "Cute Cat Toy",
     category: "Toys",
     price: 25,
-    image: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600",
+    image:
+      "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600",
   },
   {
     id: 3,
     name: "Premium Cat Bed",
     category: "Accessories",
     price: 89,
-    image: "https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?w=600",
+    image:
+      "https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?w=600",
   },
   {
     id: 4,
     name: "Royal Cat Collection",
     category: "Clothing",
     price: 55,
-    image: "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=600",
+    image:
+      "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=600",
   },
 ];
 
 export default function Home() {
   const [cart, setCart] = useState<Record<number, number>>({});
+  const [cartLoaded, setCartLoaded] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [addedProduct, setAddedProduct] = useState<number | null>(null);
   const [toast, setToast] = useState("");
   const [search, setSearch] = useState("");
+
+  // Load saved cart when the website opens
+  useEffect(() => {
+    try {
+      const savedCart = localStorage.getItem("cats-world-cart");
+
+      if (savedCart) {
+        const parsedCart = JSON.parse(savedCart);
+
+        if (
+          parsedCart &&
+          typeof parsedCart === "object" &&
+          !Array.isArray(parsedCart)
+        ) {
+          const validCart: Record<number, number> = {};
+
+          products.forEach((product) => {
+            const quantity = parsedCart[product.id];
+
+            if (
+              Number.isInteger(quantity) &&
+              quantity > 0 &&
+              quantity <= 999
+            ) {
+              validCart[product.id] = quantity;
+            }
+          });
+
+          setCart(validCart);
+        }
+      }
+    } catch {
+      console.error("Could not load saved cart.");
+    }
+
+    setCartLoaded(true);
+  }, []);
+
+  // Save cart whenever it changes
+  useEffect(() => {
+    if (!cartLoaded) return;
+
+    try {
+      localStorage.setItem("cats-world-cart", JSON.stringify(cart));
+    } catch {
+      console.error("Could not save cart.");
+    }
+  }, [cart, cartLoaded]);
 
   const addToCart = (id: number) => {
     setCart((old) => ({
@@ -51,7 +104,9 @@ export default function Home() {
     setToast("✓ Product added to your cart!");
 
     setTimeout(() => {
-      setAddedProduct((current) => current === id ? null : current);
+      setAddedProduct((current) =>
+        current === id ? null : current
+      );
       setToast("");
     }, 1800);
   };
@@ -474,5 +529,4 @@ export default function Home() {
 
     </main>
   );
-      }
-                
+                              }
