@@ -50,7 +50,11 @@ export default function CartPage() {
         products.forEach((product) => {
           const quantity = parsed?.[product.id];
 
-          if (Number.isInteger(quantity) && quantity > 0 && quantity <= 999) {
+          if (
+            Number.isInteger(quantity) &&
+            quantity > 0 &&
+            quantity <= 999
+          ) {
             validCart[product.id] = quantity;
           }
         });
@@ -77,7 +81,7 @@ export default function CartPage() {
 
       if (quantity <= 0) {
         delete next[id];
-      } else {
+      } else if (quantity <= 999) {
         next[id] = quantity;
       }
 
@@ -91,14 +95,17 @@ export default function CartPage() {
   );
 
   const subtotal = products.reduce(
-    (sum, product) => sum + product.price * (cart[product.id] || 0),
+    (sum, product) =>
+      sum + product.price * (cart[product.id] || 0),
     0
   );
 
   if (!loaded) {
     return (
       <main className="min-h-screen bg-[#fffaf4] flex items-center justify-center">
-        <p className="text-[#641e32]">Loading your shopping bag...</p>
+        <p className="text-[#641e32]">
+          Loading your shopping bag...
+        </p>
       </main>
     );
   }
@@ -111,9 +118,13 @@ export default function CartPage() {
 
       <header className="border-b border-[#eadbd2] px-5 py-5">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <Link href="/" className="text-2xl font-serif font-bold text-[#641e32]">
+          <Link
+            href="/"
+            className="text-2xl font-serif font-bold text-[#641e32]"
+          >
             Cat’s World<span className="text-[#c69b59]">.</span>
           </Link>
+
           <Link href="/" className="text-sm text-[#641e32]">
             ← Continue Shopping
           </Link>
@@ -132,12 +143,15 @@ export default function CartPage() {
         {totalItems === 0 ? (
           <div className="bg-white border border-[#eadbd2] text-center py-20 px-5">
             <p className="text-6xl">🛍️</p>
+
             <h2 className="font-serif text-2xl mt-5">
               Your bag is empty
             </h2>
+
             <p className="text-sm text-[#987c70] mt-3">
               Discover something special for your furry friend.
             </p>
+
             <Link
               href="/"
               className="inline-block mt-7 bg-[#641e32] text-white px-8 py-4 text-sm tracking-widest"
@@ -152,67 +166,83 @@ export default function CartPage() {
                 <h2 className="font-serif text-xl text-[#641e32]">
                   Your Products
                 </h2>
+
                 <span className="text-sm text-[#987c70]">
                   {totalItems} Items
                 </span>
               </div>
 
               <div className="space-y-6">
-                {products.filter((p) => cart[p.id]).map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex gap-4 border-b border-[#eadbd2] pb-6"
-                  >
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-24 h-24 md:w-32 md:h-32 object-cover"
-                    />
+                {products
+                  .filter((product) => cart[product.id])
+                  .map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex gap-4 border-b border-[#eadbd2] pb-6"
+                    >
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-24 h-24 md:w-32 md:h-32 object-cover"
+                      />
 
-                    <div className="flex-1">
-                      <p className="text-[10px] tracking-widest text-[#a77b45]">
-                        {product.category.toUpperCase()}
-                      </p>
+                      <div className="flex-1">
+                        <p className="text-[10px] tracking-widest text-[#a77b45]">
+                          {product.category.toUpperCase()}
+                        </p>
 
-                      <h3 className="font-serif text-base md:text-lg mt-1">
-                        {product.name}
-                      </h3>
+                        <h3 className="font-serif text-base md:text-lg mt-1">
+                          {product.name}
+                        </h3>
 
-                      <p className="text-[#641e32] font-semibold mt-2">
-                        {product.price} SAR
-                      </p>
+                        <p className="text-[#641e32] font-semibold mt-2">
+                          {product.price} SAR
+                        </p>
 
-                      <div className="flex items-center gap-3 mt-4">
-                        <button
-                          onClick={() => changeQuantity(product.id, -1)}
-                          className="border border-[#d8c5b9] px-3 py-1"
-                        >
-                          −
-                        </button>
+                        <div className="flex items-center gap-3 mt-4">
+                          <button
+                            onClick={() =>
+                              changeQuantity(product.id, -1)
+                            }
+                            className="border border-[#d8c5b9] px-3 py-1"
+                          >
+                            −
+                          </button>
 
-                        <span>{cart[product.id]}</span>
+                          <span>{cart[product.id]}</span>
 
-                        <button
-                          onClick={() => changeQuantity(product.id, 1)}
-                          className="border border-[#d8c5b9] px-3 py-1"
-                        >
-                          +
-                        </button>
+                          <button
+                            onClick={() =>
+                              changeQuantity(product.id, 1)
+                            }
+                            disabled={cart[product.id] >= 999}
+                            className="border border-[#d8c5b9] px-3 py-1 disabled:opacity-40"
+                          >
+                            +
+                          </button>
 
-                        <button
-                          onClick={() => changeQuantity(product.id, -cart[product.id])}
-                          className="text-xs text-red-700 ml-3"
-                        >
-                          Remove
-                        </button>
+                          <button
+                            onClick={() =>
+                              changeQuantity(
+                                product.id,
+                                -cart[product.id]
+                              )
+                            }
+                            className="text-xs text-red-700 ml-3"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="font-semibold text-[#641e32] text-sm">
+                        {(
+                          product.price * cart[product.id]
+                        ).toFixed(2)}{" "}
+                        SAR
                       </div>
                     </div>
-
-                    <div className="font-semibold text-[#641e32] text-sm">
-                      {(product.price * cart[product.id]).toFixed(2)} SAR
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
 
@@ -228,7 +258,9 @@ export default function CartPage() {
 
               <div className="flex justify-between mt-4 text-sm">
                 <span>Delivery</span>
-                <span className="text-[#987c70]">At checkout</span>
+                <span className="text-[#987c70]">
+                  Calculated at checkout
+                </span>
               </div>
 
               <div className="border-t border-[#eadbd2] mt-6 pt-5 flex justify-between font-semibold text-lg">
@@ -242,12 +274,12 @@ export default function CartPage() {
                 Final delivery charges will be calculated at checkout.
               </p>
 
-              <button
-                onClick={() => alert("Checkout system is coming in the next step!")}
-                className="w-full bg-[#641e32] hover:bg-[#842b45] text-white py-4 mt-7 text-sm tracking-widest"
+              <Link
+                href="/checkout"
+                className="block w-full bg-[#641e32] hover:bg-[#842b45] text-white py-4 mt-7 text-sm tracking-widest text-center"
               >
                 PROCEED TO CHECKOUT →
-              </button>
+              </Link>
 
               <Link
                 href="/"
@@ -261,11 +293,14 @@ export default function CartPage() {
       </section>
 
       <footer className="bg-[#29171c] text-[#eadbd2] text-center py-8 mt-16">
-        <p className="font-serif text-xl text-white">Cat’s World</p>
+        <p className="font-serif text-xl text-white">
+          Cat’s World
+        </p>
+
         <p className="text-xs mt-3">
           © 2026 Cat’s World. All rights reserved.
         </p>
       </footer>
     </main>
   );
-              }
+}
