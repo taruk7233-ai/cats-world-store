@@ -1,9 +1,20 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 
+// Supabase connection
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+
+// Products
 const products = [
   { id: 1, name: "Luxury Cat Collar", price: 35 },
   { id: 2, name: "Cute Cat Toy", price: 25 },
@@ -11,8 +22,10 @@ const products = [
   { id: 4, name: "Royal Cat Collection", price: 55 },
 ];
 
+type Cart = Record<number, number>;
+
 export default function CheckoutPage() {
-  const [cart, setCart] = useState<Record<number, number>>({});
+  const [cart, setCart] = useState<Cart>({});
   const [loaded, setLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -26,6 +39,7 @@ export default function CheckoutPage() {
     payment: "COD",
   });
 
+  // Load cart
   useEffect(() => {
     try {
       const saved = localStorage.getItem("cats-world-cart");
@@ -38,7 +52,7 @@ export default function CheckoutPage() {
           typeof parsed === "object" &&
           !Array.isArray(parsed)
         ) {
-          const valid: Record<number, number> = {};
+          const valid: Cart = {};
 
           products.forEach((product) => {
             const quantity = parsed[product.id];
@@ -55,13 +69,14 @@ export default function CheckoutPage() {
           setCart(valid);
         }
       }
-    } catch {
-      console.error("Could not load cart");
+    } catch (err) {
+      console.error("Could not load cart:", err);
     }
 
     setLoaded(true);
   }, []);
 
+  // Calculate totals
   const totalItems = Object.values(cart).reduce(
     (sum, quantity) => sum + quantity,
     0
@@ -76,11 +91,21 @@ export default function CheckoutPage() {
   const delivery = subtotal >= 199 ? 0 : 20;
   const total = subtotal + delivery;
 
-  const handleSubmit = (
-    e: React.FormEvent<HTMLFormElement>
+  // Submit order
+  const handleSubmit = async (
+    e: FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
     setError("");
+
+    if (submitting) return;
+
+    if (!supabase) {
+      setError(
+        "Supabase connection is missing. Please check your environment variables."
+      );
+      return;
+    }
 
     if (totalItems === 0) {
       setError("Your shopping cart is empty.");
@@ -97,7 +122,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    const phonePattern = /^(\+9665[0-9]{8}|05[0-9]{8}|5[0-9]{8})$/;
+    const phonePattern =
+      /^(\+9665[0-9]{8}|05[0-9]{8}|5[0-9]{8})$/;
 
     if (!phonePattern.test(form.phone.trim())) {
       setError("Please enter a valid Saudi mobile number.");
@@ -117,6 +143,7 @@ export default function CheckoutPage() {
 
       const order = {
         orderId,
+
         customer: {
           name: form.name.trim(),
           phone: form.phone.trim(),
@@ -133,7 +160,8 @@ export default function CheckoutPage() {
             name: product.name,
             price: product.price,
             quantity: cart[product.id],
-            total: product.price * cart[product.id],
+            total:
+              product.price * cart[product.id],
           })),
 
         totalItems,
@@ -144,26 +172,53 @@ export default function CheckoutPage() {
         createdAt: new Date().toISOString(),
       };
 
+      // Save order to Supabase
+      const { error: dbError } = await supabase
+        .from("orders")
+        .insert({
+          order_id: orderId,
+          customer: order.customer,
+          items: order.items,
+          total_items: totalItems,
+          subtotal: subtotal,
+          delivery: delivery,
+          total: total,
+          status: "Pending",
+        });
+
+      if (dbError) {
+        console.error("Supabase order error:", dbError);
+        throw new Error(dbError.message);
+      }
+
+      // Save order for success page
       localStorage.setItem(
         "cats-world-last-order",
         JSON.stringify(order)
       );
 
+      // Clear cart after successful database save
       localStorage.removeItem("cats-world-cart");
 
+      // Go to success page
       window.location.href =
         "/order-success?order=" +
         encodeURIComponent(orderId);
 
     } catch (err) {
-      console.error("Order error:", err);
+      console.error("Order submission failed:", err);
+
       setError(
-        "Could not place your order. Please try again."
+        err instanceof Error
+          ? `Order could not be saved: ${err.message}`
+          : "Could not place your order. Please try again."
       );
+
       setSubmitting(false);
     }
   };
 
+  // Loading
   if (!loaded) {
     return (
       <main className="min-h-screen bg-[#fffaf4] flex items-center justify-center">
@@ -174,6 +229,7 @@ export default function CheckoutPage() {
     );
   }
 
+  // Empty cart
   if (totalItems === 0) {
     return (
       <main className="min-h-screen bg-[#fffaf4] text-center px-5 py-24">
@@ -200,10 +256,12 @@ export default function CheckoutPage() {
   return (
     <main className="min-h-screen bg-[#fffaf4] text-[#30221f]">
 
+      {/* Top bar */}
       <div className="bg-[#641e32] text-white text-center py-2 text-xs tracking-widest">
         CAT’S WORLD • PREMIUM PET STORE
       </div>
 
+      {/* Header */}
       <header className="bg-[#641e32] text-white px-5 py-5">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <Link
@@ -219,6 +277,7 @@ export default function CheckoutPage() {
         </div>
       </header>
 
+      {/* Checkout */}
       <section className="max-w-5xl mx-auto px-5 py-12">
 
         <p className="text-xs tracking-[4px] text-[#a77b45]">
@@ -232,6 +291,7 @@ export default function CheckoutPage() {
         <form onSubmit={handleSubmit}>
           <div className="grid md:grid-cols-3 gap-8">
 
+            {/* Customer information */}
             <div className="md:col-span-2 bg-white border border-[#eadbd2] p-6">
 
               <h2 className="font-serif text-2xl text-[#641e32] mb-6">
@@ -240,6 +300,7 @@ export default function CheckoutPage() {
 
               <div className="space-y-5">
 
+                {/* Name */}
                 <div>
                   <label className="block text-sm mb-2">
                     Full Name *
@@ -261,6 +322,7 @@ export default function CheckoutPage() {
                   />
                 </div>
 
+                {/* Phone */}
                 <div>
                   <label className="block text-sm mb-2">
                     Saudi Mobile Number *
@@ -287,6 +349,7 @@ export default function CheckoutPage() {
                   </p>
                 </div>
 
+                {/* City and District */}
                 <div className="grid md:grid-cols-2 gap-4">
 
                   <div>
@@ -329,6 +392,7 @@ export default function CheckoutPage() {
 
                 </div>
 
+                {/* Address */}
                 <div>
                   <label className="block text-sm mb-2">
                     Full Delivery Address *
@@ -353,6 +417,7 @@ export default function CheckoutPage() {
 
               </div>
 
+              {/* Payment */}
               <h2 className="font-serif text-2xl text-[#641e32] mt-9 mb-5">
                 Payment Method
               </h2>
@@ -388,12 +453,17 @@ export default function CheckoutPage() {
                 </p>
               </div>
 
+              {/* Error */}
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 p-4 mt-6 text-sm">
+                <div
+                  role="alert"
+                  className="bg-red-50 border border-red-200 text-red-700 p-4 mt-6 text-sm break-words"
+                >
                   {error}
                 </div>
               )}
 
+              {/* Submit */}
               <button
                 type="submit"
                 disabled={submitting}
@@ -410,6 +480,7 @@ export default function CheckoutPage() {
 
             </div>
 
+            {/* Order Summary */}
             <aside className="bg-white border border-[#eadbd2] p-6 h-fit">
 
               <h2 className="font-serif text-2xl text-[#641e32] border-b border-[#eadbd2] pb-4">
@@ -480,6 +551,7 @@ export default function CheckoutPage() {
         </form>
       </section>
 
+      {/* Footer */}
       <footer className="bg-[#29171c] text-white text-center py-8">
         <p className="font-serif text-xl">
           Cat’s World
@@ -497,3 +569,4 @@ export default function CheckoutPage() {
     </main>
   );
         }
+                  
