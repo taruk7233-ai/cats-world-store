@@ -1,49 +1,17 @@
 
 "use client";
 
-import { useEffect, useState, type FormEvent, type ChangeEvent } from "react";
-import Link from "next/link";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-const products = [
-  {
-    id: 1,
-    name: "Luxury Cat Collar",
-    category: "Collars",
-    price: 35,
-    image: "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600",
-  },
-  {
-    id: 2,
-    name: "Cute Cat Toy",
-    category: "Toys",
-    price: 25,
-    image: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600",
-  },
-  {
-    id: 3,
-    name: "Premium Cat Bed",
-    category: "Accessories",
-    price: 89,
-    image: "https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?w=600",
-  },
-  {
-    id: 4,
-    name: "Royal Cat Collection",
-    category: "Clothing",
-    price: 55,
-    image: "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=600",
-  },
-];
+const CART_KEY = "cats-world-cart";
+const ORDER_KEY = "cats-world-last-order";
 
 type CartItem = {
   id: number;
@@ -54,14 +22,6 @@ type CartItem = {
   quantity: number;
 };
 
-type Customer = {
-  name: string;
-  phone: string;
-  city: string;
-  district: string;
-  address: string;
-};
-
 export default function CheckoutPage() {
   const router = useRouter();
 
@@ -70,40 +30,44 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [form, setForm] = useState<Customer>({
-    name: "",
-    phone: "",
-    city: "",
-    district: "",
-    address: "",
-  });
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [city, setCity] = useState("Madinah");
+  const [district, setDistrict] = useState("");
+  const [address, setAddress] = useState("");
+  const [payment, setPayment] = useState("COD");
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("cats-world-cart");
+      const saved = localStorage.getItem(CART_KEY);
 
       if (saved) {
         const parsed = JSON.parse(saved);
 
-        const items = products
-          .filter((product) => {
-            const quantity = parsed?.[product.id];
+        const items = Array.isArray(parsed)
+          ? parsed
+          : Object.entries(parsed).map(([id, quantity]) => {
+              const product = [
+                { id: 1, name: "Luxury Cat Collar", category: "Collars", price: 35, image: "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600" },
+                { id: 2, name: "Cute Cat Toy", category: "Toys", price: 25, image: "https://images.unsplash.com/photo-1545249390-6bdfa286032f?w=600" },
+                { id: 3, name: "Premium Cat Bed", category: "Beds", price: 89, image: "https://images.unsplash.com/photo-1511044568932-338cba0ad803?w=600" },
+                { id: 4, name: "Royal Cat Collection", category: "Accessories", price: 55, image: "https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=600" },
+              ].find((p) => p.id === Number(id));
 
-            return (
-              Number.isInteger(quantity) &&
-              quantity > 0 &&
-              quantity <= 999
-            );
-          })
-          .map((product) => ({
-            ...product,
-            quantity: parsed[product.id],
-          }));
+              return product
+                ? { ...product, quantity: Number(quantity) }
+                : null;
+            }).filter(Boolean);
 
-        setCart(items);
+        setCart(
+          items.map((item: any) => ({
+            ...item,
+            quantity: Number(item.quantity || 1),
+          }))
+        );
       }
-    } catch (err) {
-      console.error("Cart loading error:", err);
+    } catch (e) {
+      console.error("Cart loading error:", e);
     }
 
     setLoaded(true);
@@ -114,435 +78,301 @@ export default function CheckoutPage() {
     0
   );
 
-  const delivery = subtotal >= 199 ? 0 : 20;
-  const total = subtotal + delivery;
-
   const totalItems = cart.reduce(
     (sum, item) => sum + item.quantity,
     0
   );
 
-  const handleChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    setForm((old) => ({
-      ...old,
-      [e.target.name]: e.target.value,
-    }));
-  };
+  const update = (
+    setter: (value: string) => void,
+    value: string
+  ) => setter(value);
 
-  const inputStyle =
-    "w-full rounded-xl border border-[#eadbd2] bg-white px-4 py-3.5 text-sm text-gray-900 outline-none focus:border-[#7b2438] focus:ring-2 focus:ring-[#7b2438]/10";
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const placeOrder = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
-    if (loading) return;
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      setError("Supabase environment variables are missing.");
+      return;
+    }
 
     if (!cart.length) {
-      setError("Your shopping cart is empty.");
+      setError("Your cart is empty.");
       return;
     }
 
-    if (!supabase) {
-      setError("Database connection is not configured.");
+    if (!/^(05\d{8}|5\d{8}|\+9665\d{8}|009665\d{8})$/.test(
+      phone.replace(/[\s-]/g, "")
+    )) {
+      setError("Enter a valid Saudi mobile number.");
       return;
     }
 
-    const cleanPhone = form.phone.replace(/[\s-]/g, "");
+    if (!name.trim() || !city.trim() || !district.trim() || !address.trim()) {
+      setError("Please complete all delivery information.");
+      return;
+    }
 
-    if (!/^(05\d{8}|\+9665\d{8}|9665\d{8})$/.test(cleanPhone)) {
-      setError("Please enter a valid Saudi mobile number.");
+    if (payment !== "COD") {
+      setError("Online payment is coming soon. Please select Cash on Delivery.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const orderId = `CW-${Date.now()}`;
-
-      const customer = {
-        ...form,
-        phone: cleanPhone,
-        payment: "COD",
-        paymentMethod: "Cash on Delivery",
-      };
+      const orderId =
+        "CW-" + Date.now().toString().slice(-9);
 
       const order = {
-        orderId,
-        customer,
+        order_id: orderId,
+        customer: {
+          name: name.trim(),
+          phone: phone.trim(),
+          city: city.trim(),
+          district: district.trim(),
+          address: address.trim(),
+          paymentMethod: "Cash on Delivery",
+        },
         items: cart,
-        total,
+        total_items: totalItems,
+        subtotal,
+        delivery: 0,
+        total: subtotal,
         status: "Pending",
       };
 
       const { error: dbError } = await supabase
         .from("orders")
-        .insert({
-          order_id: orderId,
-          customer,
-          items: cart,
-          total_items: totalItems,
-          subtotal,
-          delivery,
-          total,
-          status: "Pending",
-        });
+        .insert([order]);
 
       if (dbError) {
-        throw dbError;
+        throw new Error(
+          `Supabase Error: ${dbError.message} | Code: ${dbError.code} | Details: ${dbError.details || "None"}`
+        );
       }
 
       localStorage.setItem(
-        "cats-world-last-order",
-        JSON.stringify(order)
+        ORDER_KEY,
+        JSON.stringify({
+          orderId,
+          customer: order.customer,
+          items: cart,
+          totalItems,
+          subtotal,
+          delivery: 0,
+          total: subtotal,
+          status: "Pending",
+        })
       );
 
-      localStorage.removeItem("cats-world-cart");
+      localStorage.removeItem(CART_KEY);
 
       router.push(
         `/order-success?order=${encodeURIComponent(orderId)}`
       );
     } catch (err) {
-      console.error("Order error:", err);
-
+      console.error(err);
       setError(
-        "Order could not be placed. Please try again."
+        err instanceof Error ? err.message : "Order failed."
       );
-
+    } finally {
       setLoading(false);
     }
   };
 
   if (!loaded) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#fffaf4]">
-        <p className="text-[#641e32]">Loading Checkout...</p>
+      <main className="min-h-screen bg-[#fffaf5] flex items-center justify-center">
+        Loading Checkout...
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#fffaf4] px-4 py-6 sm:px-6 sm:py-10 text-[#30221f]">
-      <div className="mx-auto max-w-5xl">
+    <main className="min-h-screen bg-[#fffaf5] text-[#35151f]">
+      <header className="bg-[#711b36] text-white text-center py-7">
+        <h1 className="text-3xl font-bold">Cat&apos;s World</h1>
+        <p className="text-sm mt-2 text-pink-100">
+          Premium Cat Accessories
+        </p>
+      </header>
 
-        <header className="flex justify-between items-center gap-3 mb-8">
-          <Link
-            href="/"
-            className="text-xl font-serif font-bold text-[#641e32]"
-          >
-            Cat’s World.
-          </Link>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <h2 className="text-3xl font-bold text-[#711b36] mb-7">
+          Checkout
+        </h2>
 
-          <Link
-            href="/cart"
-            className="text-sm text-[#641e32]"
-          >
-            ← Back to Cart
-          </Link>
-        </header>
-
-        <div className="text-center mb-8">
-          <p className="text-xs tracking-[3px] text-[#a77b45]">
-            ALMOST THERE
-          </p>
-
-          <h1 className="text-3xl sm:text-4xl font-serif font-bold text-[#641e32] mt-2">
-            Checkout
-          </h1>
-
-          <p className="text-sm text-gray-500 mt-2">
-            Complete your delivery information.
-          </p>
-        </div>
-
-        {cart.length === 0 ? (
-          <div className="bg-white border border-[#eadbd2] rounded-2xl p-8 text-center">
-            <p className="text-4xl">🛍️</p>
-
-            <h2 className="text-xl font-serif text-[#641e32] mt-4">
-              Your cart is empty
-            </h2>
-
-            <Link
-              href="/"
-              className="inline-block mt-5 bg-[#641e32] text-white px-7 py-3 rounded-xl"
+        {!cart.length ? (
+          <div className="bg-white p-8 rounded-2xl text-center">
+            <h3 className="text-xl font-bold">Your Cart Is Empty</h3>
+            <button
+              onClick={() => router.push("/")}
+              className="mt-5 bg-[#711b36] text-white px-6 py-3 rounded-xl"
             >
               Continue Shopping
-            </Link>
+            </button>
           </div>
         ) : (
           <form
-            onSubmit={handleSubmit}
-            className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start"
+            onSubmit={placeOrder}
+            className="grid grid-cols-1 lg:grid-cols-3 gap-7"
           >
-
-            {/* Delivery Information */}
-
-            <section className="lg:col-span-3 bg-white border border-[#eadbd2] rounded-2xl p-5 sm:p-7 space-y-5 shadow-sm">
-
-              <div>
-                <h2 className="text-xl font-serif font-bold text-[#641e32]">
+            <div className="lg:col-span-2 space-y-7">
+              <section className="bg-white p-5 sm:p-7 rounded-2xl shadow-sm">
+                <h3 className="text-xl font-bold text-[#711b36] mb-6">
                   Delivery Information
-                </h2>
+                </h3>
 
-                <p className="text-xs text-gray-500 mt-1">
-                  Where should we deliver your order?
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold mb-2">
-                  Full Name *
-                </label>
-
-                <input
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="Enter your full name"
-                  className={inputStyle}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold mb-2">
-                  Saudi Mobile Number *
-                </label>
-
-                <input
-                  name="phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="+966 5XXXXXXXX"
-                  className={inputStyle}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    City *
-                  </label>
+                <div className="space-y-4">
+                  <input
+                    required
+                    value={name}
+                    onChange={(e) => update(setName, e.target.value)}
+                    placeholder="Full Name"
+                    className="w-full border p-3 rounded-xl"
+                  />
 
                   <input
-                    name="city"
-                    value={form.city}
-                    onChange={handleChange}
-                    placeholder="Madinah"
-                    className={inputStyle}
                     required
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => update(setPhone, e.target.value)}
+                    placeholder="Saudi Mobile: 05XXXXXXXX"
+                    className="w-full border p-3 rounded-xl"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    District *
-                  </label>
 
                   <input
-                    name="district"
-                    value={form.district}
-                    onChange={handleChange}
-                    placeholder="Your district"
-                    className={inputStyle}
                     required
+                    value={city}
+                    onChange={(e) => update(setCity, e.target.value)}
+                    placeholder="City"
+                    className="w-full border p-3 rounded-xl"
+                  />
+
+                  <input
+                    required
+                    value={district}
+                    onChange={(e) => update(setDistrict, e.target.value)}
+                    placeholder="District"
+                    className="w-full border p-3 rounded-xl"
+                  />
+
+                  <textarea
+                    required
+                    rows={4}
+                    value={address}
+                    onChange={(e) => update(setAddress, e.target.value)}
+                    placeholder="Complete Delivery Address"
+                    className="w-full border p-3 rounded-xl"
                   />
                 </div>
+              </section>
 
-              </div>
+              <section className="bg-white p-5 sm:p-7 rounded-2xl shadow-sm">
+                <h3 className="text-xl font-bold text-[#711b36] mb-5">
+                  Payment Method
+                </h3>
 
-              <div>
-                <label className="block text-sm font-semibold mb-2">
-                  Full Delivery Address *
+                <label className="flex gap-3 items-center border-2 border-[#711b36] bg-[#fff8fa] rounded-xl p-4">
+                  <input
+                    type="radio"
+                    checked={payment === "COD"}
+                    onChange={() => setPayment("COD")}
+                  />
+                  <span className="font-semibold">
+                    Cash on Delivery
+                  </span>
+                  <span>💵</span>
                 </label>
 
-                <textarea
-                  name="address"
-                  value={form.address}
-                  onChange={handleChange}
-                  placeholder="Building number, street, apartment and landmark..."
-                  rows={4}
-                  className={inputStyle + " resize-y"}
-                  required
-                />
-              </div>
-
-              {/* Payment Methods */}
-
-              <div>
-                <label className="block text-sm font-semibold mb-3">
-                  Choose Payment Method
-                </label>
-
-                <div className="space-y-3">
-
-                  <div className="flex items-center gap-3 rounded-xl border-2 border-[#641e32] bg-[#fffaf4] p-4">
-                    <span className="text-2xl">💵</span>
-
-                    <div className="flex-1">
-                      <p className="font-bold text-[#641e32]">
-                        Cash on Delivery
-                      </p>
-
-                      <p className="text-xs text-gray-500">
-                        Pay when your order arrives.
-                      </p>
-                    </div>
-
-                    <span className="text-[#641e32] text-xl">
-                      ✓
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 rounded-xl border border-[#eadbd2] bg-gray-50 p-4 opacity-75">
-                    <span className="text-2xl">💳</span>
-
-                    <div className="flex-1">
-                      <p className="font-bold text-[#641e32]">
-                        Online Payment
-                      </p>
-
-                      <p className="text-xs text-gray-500">
-                        Mada · Visa · Mastercard
-                      </p>
-
-                      <p className="text-xs text-[#a77b45] mt-1">
-                        Coming Soon — Moyasar setup pending
-                      </p>
-                    </div>
-
-                    <span className="text-xs text-gray-500">
-                      Soon
-                    </span>
-                  </div>
-
+                <div className="mt-4 border rounded-xl p-4 opacity-70">
+                  <p className="font-bold">Online Payment</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Mada • Visa • Mastercard
+                  </p>
+                  <span className="inline-block mt-3 bg-gray-100 px-3 py-2 rounded-lg text-xs font-bold">
+                    Coming Soon
+                  </span>
                 </div>
-              </div>
+              </section>
+            </div>
 
-            </section>
-
-            {/* Order Summary */}
-
-            <section className="lg:col-span-2 bg-white border border-[#eadbd2] rounded-2xl p-5 sm:p-7 shadow-sm">
-
-              <h2 className="text-xl font-serif font-bold text-[#641e32] mb-5">
+            <aside className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm h-fit">
+              <h3 className="text-xl font-bold text-[#711b36] mb-5">
                 Order Summary
-              </h2>
+              </h3>
 
-              <div className="max-h-64 overflow-y-auto space-y-4">
-
+              <div className="space-y-4">
                 {cart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 border-b border-[#eadbd2] pb-4"
-                  >
+                  <div key={item.id} className="flex gap-3 items-center">
                     <img
                       src={item.image}
                       alt={item.name}
-                      className="w-14 h-14 rounded-lg object-cover"
+                      className="w-16 h-16 object-cover rounded-xl"
                     />
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">
-                        {item.name}
-                      </p>
-
-                      <p className="text-xs text-gray-500 mt-1">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{item.name}</p>
+                      <p className="text-xs text-gray-500">
                         Qty: {item.quantity}
                       </p>
+                      <p className="font-bold text-[#711b36]">
+                        {(item.price * item.quantity).toFixed(2)} SAR
+                      </p>
                     </div>
-
-                    <p className="text-sm font-bold text-[#641e32] whitespace-nowrap">
-                      {(item.price * item.quantity).toFixed(2)} SAR
-                    </p>
                   </div>
                 ))}
-
               </div>
 
-              <div className="space-y-4 mt-6 text-sm">
+              <hr className="my-5" />
 
-                <div className="flex justify-between">
-                  <span className="text-gray-500">
-                    Total Items
-                  </span>
-
-                  <span>{totalItems}</span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-gray-500">
-                    Subtotal
-                  </span>
-
-                  <span>{subtotal.toFixed(2)} SAR</span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-gray-500">
-                    Delivery
-                  </span>
-
-                  <span>
-                    {delivery === 0
-                      ? "FREE"
-                      : `${delivery.toFixed(2)} SAR`}
-                  </span>
-                </div>
-
-                <div className="border-t border-dashed border-[#eadbd2] pt-4 flex justify-between items-center">
-                  <span className="font-bold">Total</span>
-
-                  <span className="text-xl font-bold text-[#641e32]">
-                    {total.toFixed(2)} SAR
-                  </span>
-                </div>
-
+              <div className="flex justify-between mb-3">
+                <span>Items ({totalItems})</span>
+                <span>{subtotal.toFixed(2)} SAR</span>
               </div>
 
-              <p className="mt-5 rounded-xl bg-[#fffaf4] p-3 text-center text-xs text-[#641e32]">
-                {delivery === 0
-                  ? "🎉 FREE delivery unlocked!"
-                  : `Add ${(199 - subtotal).toFixed(2)} SAR more for FREE delivery!`}
+              <div className="flex justify-between mb-3">
+                <span>Delivery</span>
+                <span>To be confirmed</span>
+              </div>
+
+              <hr className="my-5" />
+
+              <div className="flex justify-between font-bold text-xl">
+                <span>Total</span>
+                <span className="text-[#711b36]">
+                  {subtotal.toFixed(2)} SAR
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-500 mt-2">
+                Delivery charges will be confirmed separately.
               </p>
 
               {error && (
-                <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">
-                  {error}
-                </p>
+                <div className="mt-5 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm break-words">
+                  <strong>Order Error:</strong>
+                  <p className="mt-1">{error}</p>
+                </div>
               )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full min-h-14 mt-6 rounded-xl bg-[#641e32] hover:bg-[#842b45] text-white font-bold text-sm transition disabled:opacity-60"
+                className="w-full mt-6 bg-[#711b36] hover:bg-[#551126] text-white font-bold py-4 rounded-xl disabled:opacity-50"
               >
-                {loading
-                  ? "Placing Your Order..."
-                  : `PLACE ORDER · ${total.toFixed(2)} SAR`}
+                {loading ? "Placing Order..." : "Place Order"}
               </button>
-
-              <p className="text-center text-xs text-gray-400 mt-4">
-                Cash on Delivery · Cat’s World
-              </p>
-
-            </section>
-
+            </aside>
           </form>
         )}
-
-        <footer className="text-center text-xs text-gray-400 mt-10">
-          © 2026 Cat’s World. All rights reserved.
-        </footer>
-
       </div>
+
+      <footer className="bg-[#711b36] text-white text-center py-6 mt-10">
+        © 2026 Cat&apos;s World. All Rights Reserved.
+      </footer>
     </main>
   );
-}
+                      }
