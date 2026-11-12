@@ -88,6 +88,7 @@ export default function CheckoutPage() {
         const items = products
           .filter((product) => {
             const quantity = parsed?.[product.id];
+
             return (
               Number.isInteger(quantity) &&
               quantity > 0 &&
@@ -137,6 +138,8 @@ export default function CheckoutPage() {
     e.preventDefault();
     setError("");
 
+    if (loading) return;
+
     if (!cart.length) {
       setError("Your shopping cart is empty.");
       return;
@@ -147,6 +150,13 @@ export default function CheckoutPage() {
       return;
     }
 
+    const cleanPhone = form.phone.replace(/[\s-]/g, "");
+
+    if (!/^(05\d{8}|\+9665\d{8}|9665\d{8})$/.test(cleanPhone)) {
+      setError("Please enter a valid Saudi mobile number.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -154,7 +164,9 @@ export default function CheckoutPage() {
 
       const customer = {
         ...form,
+        phone: cleanPhone,
         payment: "COD",
+        paymentMethod: "Cash on Delivery",
       };
 
       const order = {
@@ -194,9 +206,11 @@ export default function CheckoutPage() {
       );
     } catch (err) {
       console.error("Order error:", err);
+
       setError(
         "Order could not be placed. Please try again."
       );
+
       setLoading(false);
     }
   };
@@ -204,9 +218,7 @@ export default function CheckoutPage() {
   if (!loaded) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#fffaf4]">
-        <p className="text-[#641e32]">
-          Loading Checkout...
-        </p>
+        <p className="text-[#641e32]">Loading Checkout...</p>
       </main>
     );
   }
@@ -235,9 +247,11 @@ export default function CheckoutPage() {
           <p className="text-xs tracking-[3px] text-[#a77b45]">
             ALMOST THERE
           </p>
+
           <h1 className="text-3xl sm:text-4xl font-serif font-bold text-[#641e32] mt-2">
             Checkout
           </h1>
+
           <p className="text-sm text-gray-500 mt-2">
             Complete your delivery information.
           </p>
@@ -246,9 +260,11 @@ export default function CheckoutPage() {
         {cart.length === 0 ? (
           <div className="bg-white border border-[#eadbd2] rounded-2xl p-8 text-center">
             <p className="text-4xl">🛍️</p>
+
             <h2 className="text-xl font-serif text-[#641e32] mt-4">
               Your cart is empty
             </h2>
+
             <Link
               href="/"
               className="inline-block mt-5 bg-[#641e32] text-white px-7 py-3 rounded-xl"
@@ -261,7 +277,8 @@ export default function CheckoutPage() {
             onSubmit={handleSubmit}
             className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start"
           >
-            {/* Customer Information */}
+
+            {/* Delivery Information */}
 
             <section className="lg:col-span-3 bg-white border border-[#eadbd2] rounded-2xl p-5 sm:p-7 space-y-5 shadow-sm">
 
@@ -269,6 +286,7 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-serif font-bold text-[#641e32]">
                   Delivery Information
                 </h2>
+
                 <p className="text-xs text-gray-500 mt-1">
                   Where should we deliver your order?
                 </p>
@@ -278,6 +296,7 @@ export default function CheckoutPage() {
                 <label className="block text-sm font-semibold mb-2">
                   Full Name *
                 </label>
+
                 <input
                   name="name"
                   value={form.name}
@@ -292,6 +311,7 @@ export default function CheckoutPage() {
                 <label className="block text-sm font-semibold mb-2">
                   Saudi Mobile Number *
                 </label>
+
                 <input
                   name="phone"
                   type="tel"
@@ -305,10 +325,12 @@ export default function CheckoutPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     City *
                   </label>
+
                   <input
                     name="city"
                     value={form.city}
@@ -323,6 +345,7 @@ export default function CheckoutPage() {
                   <label className="block text-sm font-semibold mb-2">
                     District *
                   </label>
+
                   <input
                     name="district"
                     value={form.district}
@@ -332,12 +355,14 @@ export default function CheckoutPage() {
                     required
                   />
                 </div>
+
               </div>
 
               <div>
                 <label className="block text-sm font-semibold mb-2">
                   Full Delivery Address *
                 </label>
+
                 <textarea
                   name="address"
                   value={form.address}
@@ -349,24 +374,55 @@ export default function CheckoutPage() {
                 />
               </div>
 
+              {/* Payment Methods */}
+
               <div>
-                <label className="block text-sm font-semibold mb-2">
-                  Payment Method
+                <label className="block text-sm font-semibold mb-3">
+                  Choose Payment Method
                 </label>
 
-                <div className="flex items-center gap-3 rounded-xl border border-[#641e32] bg-[#fffaf4] p-4">
-                  <span className="text-2xl">💵</span>
-                  <div>
-                    <p className="font-bold text-[#641e32]">
-                      Cash on Delivery
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Pay when your order arrives.
-                    </p>
+                <div className="space-y-3">
+
+                  <div className="flex items-center gap-3 rounded-xl border-2 border-[#641e32] bg-[#fffaf4] p-4">
+                    <span className="text-2xl">💵</span>
+
+                    <div className="flex-1">
+                      <p className="font-bold text-[#641e32]">
+                        Cash on Delivery
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        Pay when your order arrives.
+                      </p>
+                    </div>
+
+                    <span className="text-[#641e32] text-xl">
+                      ✓
+                    </span>
                   </div>
-                  <span className="ml-auto text-[#641e32] text-xl">
-                    ✓
-                  </span>
+
+                  <div className="flex items-center gap-3 rounded-xl border border-[#eadbd2] bg-gray-50 p-4 opacity-75">
+                    <span className="text-2xl">💳</span>
+
+                    <div className="flex-1">
+                      <p className="font-bold text-[#641e32]">
+                        Online Payment
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        Mada · Visa · Mastercard
+                      </p>
+
+                      <p className="text-xs text-[#a77b45] mt-1">
+                        Coming Soon — Moyasar setup pending
+                      </p>
+                    </div>
+
+                    <span className="text-xs text-gray-500">
+                      Soon
+                    </span>
+                  </div>
+
                 </div>
               </div>
 
@@ -381,6 +437,7 @@ export default function CheckoutPage() {
               </h2>
 
               <div className="max-h-64 overflow-y-auto space-y-4">
+
                 {cart.map((item) => (
                   <div
                     key={item.id}
@@ -396,6 +453,7 @@ export default function CheckoutPage() {
                       <p className="text-sm font-semibold truncate">
                         {item.name}
                       </p>
+
                       <p className="text-xs text-gray-500 mt-1">
                         Qty: {item.quantity}
                       </p>
@@ -406,6 +464,7 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 ))}
+
               </div>
 
               <div className="space-y-4 mt-6 text-sm">
@@ -414,6 +473,7 @@ export default function CheckoutPage() {
                   <span className="text-gray-500">
                     Total Items
                   </span>
+
                   <span>{totalItems}</span>
                 </div>
 
@@ -421,6 +481,7 @@ export default function CheckoutPage() {
                   <span className="text-gray-500">
                     Subtotal
                   </span>
+
                   <span>{subtotal.toFixed(2)} SAR</span>
                 </div>
 
@@ -428,6 +489,7 @@ export default function CheckoutPage() {
                   <span className="text-gray-500">
                     Delivery
                   </span>
+
                   <span>
                     {delivery === 0
                       ? "FREE"
@@ -437,6 +499,7 @@ export default function CheckoutPage() {
 
                 <div className="border-t border-dashed border-[#eadbd2] pt-4 flex justify-between items-center">
                   <span className="font-bold">Total</span>
+
                   <span className="text-xl font-bold text-[#641e32]">
                     {total.toFixed(2)} SAR
                   </span>
@@ -471,6 +534,7 @@ export default function CheckoutPage() {
               </p>
 
             </section>
+
           </form>
         )}
 
@@ -481,4 +545,4 @@ export default function CheckoutPage() {
       </div>
     </main>
   );
-                    }
+}
