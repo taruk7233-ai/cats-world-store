@@ -1,131 +1,158 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createClient } from "@supabase/supabase-js";
+
+const OWNER_ID = "d6d7f71f-92e7-4caa-a3cb-b09c9590b70a";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type StaffRole = "full_admin" | "manager" | "moderator";
 
-const OWNER_ID = "d6d7f71f-92e7-4caa-a3cb-b09c9590670a";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 export default function StaffManagementPage() {
+  const [checking, setChecking] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<StaffRole>("manager");
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
   const [message, setMessage] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
 
   useEffect(() => {
-    async function checkOwner() {
+    let active = true;
+
+    const checkOwner = async () => {
       const { data, error } = await supabase.auth.getUser();
 
-      if (!error && data.user?.id === OWNER_ID) {
-        setIsOwner(true);
-      } else {
-        setIsOwner(false);
+      if (!active) return;
+
+      if (error || !data.user) {
+        setAuthorized(false);
+        setChecking(false);
+        return;
       }
 
-      setLoading(false);
-    }
+      setAuthorized(data.user.id === OWNER_ID);
+      setChecking(false);
+    };
 
     checkOwner();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      checkOwner();
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  async function addStaff() {
+  const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setMessage("");
-    setSuccess(false);
 
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setMessage("Please enter a valid email address.");
+    if (!cleanEmail) {
+      setMessageType("error");
+      setMessage("Please enter an email address.");
       return;
     }
 
-    if (!cleanEmail.endsWith("@gmail.com")) {
-      setMessage("Please use a Gmail address.");
+    if (!/^[^\s@]+@gmail\.com$/.test(cleanEmail)) {
+      setMessageType("error");
+      setMessage("Please enter a valid Gmail address.");
       return;
     }
 
     setSending(true);
 
     try {
-      const { data: sessionData } =
+      const { data: sessionData, error: sessionError } =
         await supabase.auth.getSession();
 
-      if (!sessionData.session) {
-        throw new Error("Please log in again.");
+      if (sessionError || !sessionData.session) {
+        throw new Error("Your login session has expired. Please log in again.");
       }
 
-      if (sessionData.session.user.id !== OWNER_ID) {
-        throw new Error("Only the Owner can add staff.");
-      }
-
-      const { data, error } =
-        await supabase.functions.invoke("invite-staff", {
+      const { data, error } = await supabase.functions.invoke(
+        "invite-staff",
+        {
           body: {
             email: cleanEmail,
-            role: role,
+            role,
           },
-        });
+        }
+      );
 
       if (error) {
         let details = error.message;
 
-        if (error.context instanceof Response) {
-          const result = await error.context.json();
-          details = result.error || details;
+        try {
+          const response = error.context;
+          if (response && typeof response.json === "function") {
+            const body = await response.json();
+            details = body.error || details;
+          }
+        } catch {
+          // Keep the original error message.
         }
 
         throw new Error(details);
       }
 
       if (!data?.success) {
-        throw new Error(data?.error || "Invitation failed.");
+        throw new Error(data?.error || "Invitation could not be sent.");
       }
 
-      setSuccess(true);
-      setMessage(
-        `Invitation sent to ${cleanEmail} as ${role.replace("_", " ")}.`
-      );
+      setMessageType("success");
+      setMessage(`Invitation sent successfully to ${cleanEmail}.`);
       setEmail("");
-    } catch (err) {
-      setSuccess(false);
+      setRole("manager");
+    } catch (error) {
+      setMessageType("error");
       setMessage(
-        err instanceof Error ? err.message : "Something went wrong."
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
       );
     } finally {
       setSending(false);
     }
-  }
+  };
 
-  if (loading) {
+  if (checking) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#f8f3ed]">
-        <p className="text-[#7b263e]">Checking Owner access...</p>
+      <main className="min-h-screen bg-[#faf5ef] flex items-center justify-center p-6">
+        <p className="text-[#6f1d35] font-semibold">Checking access...</p>
       </main>
     );
   }
 
-  if (!isOwner) {
+  if (!authorized) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#f8f3ed] p-5">
-        <div className="bg-white rounded-2xl p-7 shadow max-w-md text-center">
-          <h1 className="text-2xl font-bold text-[#7b263e]">
+      <main className="min-h-screen bg-[#faf5ef] flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
+          <div className="text-4xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-[#6f1d35]">
             Access Denied
           </h1>
-          <p className="text-gray-600 mt-3">
-            Only the Cat's World Owner can access Staff Management.
+          <p className="mt-3 text-sm text-gray-600">
+            Only the Owner account can access Staff Management.
+            Please log in with your Owner account.
           </p>
-          <a href="/admin" className="inline-block mt-5 text-[#7b263e] underline">
-            Back to Admin Login
+          <a
+            href="/admin"
+            className="mt-6 inline-block rounded-xl bg-[#6f1d35] px-6 py-3 font-semibold text-white"
+          >
+            Go to Admin Login
           </a>
         </div>
       </main>
@@ -133,55 +160,70 @@ export default function StaffManagementPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f3ed] p-4 md:p-8 text-[#3b1822]">
-      <div className="max-w-3xl mx-auto">
+    <main className="min-h-screen bg-[#faf5ef] p-4 sm:p-8">
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#a77b54]">
+            Cat&apos;s World Admin
+          </p>
+          <h1 className="mt-2 text-3xl font-bold text-[#6f1d35] sm:text-4xl">
+            Staff Management
+          </h1>
+          <p className="mt-2 text-gray-600">
+            Invite and assign roles to your team members.
+          </p>
+        </div>
 
-        <a
-          href="/admin/dashboard"
-          className="text-sm text-[#7b263e] underline"
-        >
-          ← Back to Dashboard
-        </a>
-
-        <h1 className="text-3xl font-bold mt-5">
-          Staff Management
-        </h1>
-
-        <p className="text-gray-600 mt-2 mb-8">
-          Invite and manage your Cat's World team.
-        </p>
-
-        <section className="bg-white rounded-2xl shadow-sm p-6">
-          <h2 className="text-xl font-bold mb-5">
-            Invite New Staff
-          </h2>
-
-          <div className="space-y-4">
+        <div className="rounded-2xl border border-[#eaded2] bg-white p-5 shadow-sm sm:p-8">
+          <div className="mb-7 flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f5e8e9] text-2xl">
+              👑
+            </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">
+              <h2 className="text-xl font-bold text-[#6f1d35]">
+                Invite New Staff
+              </h2>
+              <p className="text-sm text-gray-500">
+                Owner permission required
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleInvite} className="space-y-6">
+            <div>
+              <label
+                htmlFor="staff-email"
+                className="mb-2 block text-sm font-semibold text-gray-700"
+              >
                 Staff Gmail Address
               </label>
-
               <input
+                id="staff-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="example@gmail.com"
-                className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-[#7b263e]"
+                required
+                disabled={sending}
+                className="w-full rounded-xl border border-[#e5d7cb] bg-[#fffdfb] px-4 py-3 text-gray-800 outline-none transition focus:border-[#6f1d35] focus:ring-2 focus:ring-[#6f1d35]/10 disabled:opacity-60"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold mb-2">
-                Select Role
+              <label
+                htmlFor="staff-role"
+                className="mb-2 block text-sm font-semibold text-gray-700"
+              >
+                Select Staff Role
               </label>
-
               <select
+                id="staff-role"
                 value={role}
-                onChange={(e) =>
-                  setRole(e.target.value as StaffRole)
+                onChange={(event) =>
+                  setRole(event.target.value as StaffRole)
                 }
-                className="w-full border border-gray-300 rounded-xl p-3 bg-white"
+                disabled={sending}
+                className="w-full rounded-xl border border-[#e5d7cb] bg-[#fffdfb] px-4 py-3 text-gray-800 outline-none focus:border-[#6f1d35] focus:ring-2 focus:ring-[#6f1d35]/10 disabled:opacity-60"
               >
                 <option value="manager">Manager</option>
                 <option value="moderator">Moderator</option>
@@ -189,33 +231,59 @@ export default function StaffManagementPage() {
               </select>
             </div>
 
-            <button
-              onClick={addStaff}
-              disabled={sending}
-              className="w-full bg-[#7b263e] text-white rounded-xl p-3 font-semibold disabled:opacity-50"
-            >
-              {sending ? "Sending Invitation..." : "+ Send Invitation"}
-            </button>
+            <div className="rounded-xl bg-[#faf5ef] p-4">
+              <p className="mb-2 text-sm font-bold text-[#6f1d35]">
+                Role Information
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>
+                  <strong>Full Admin:</strong> Manage most admin operations.
+                </li>
+                <li>
+                  <strong>Manager:</strong> Manage assigned store operations.
+                </li>
+                <li>
+                  <strong>Moderator:</strong> Handle limited moderation tasks.
+                </li>
+              </ul>
+              <p className="mt-3 text-xs text-gray-500">
+                Only the Owner can invite staff and assign Full Admin roles.
+              </p>
+            </div>
 
             {message && (
-              <p
-                className={`text-sm p-3 rounded-xl ${
-                  success
-                    ? "bg-green-50 text-green-800"
-                    : "bg-red-50 text-red-700"
+              <div
+                role="alert"
+                className={`rounded-xl p-4 text-sm font-medium ${
+                  messageType === "success"
+                    ? "border border-green-200 bg-green-50 text-green-800"
+                    : "border border-red-200 bg-red-50 text-red-700"
                 }`}
               >
                 {message}
-              </p>
+              </div>
             )}
-          </div>
-        </section>
 
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-900">
-          Only the Owner can invite staff and assign Full Admin roles.
-          Staff invitations are handled securely by Supabase.
+            <button
+              type="submit"
+              disabled={sending}
+              className="w-full rounded-xl bg-[#6f1d35] px-6 py-4 font-bold text-white shadow-md transition hover:bg-[#541329] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {sending ? "Sending Invitation..." : "Send Staff Invitation"}
+            </button>
+          </form>
         </div>
 
+        <div className="mt-6 rounded-xl border border-[#eaded2] bg-white p-5">
+          <h3 className="font-bold text-[#6f1d35]">
+            Important Security Information
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-gray-600">
+            Staff invitations are processed through the Supabase Edge
+            Function. The server checks the Owner role before creating
+            an invitation. This page does not contain your service role key.
+          </p>
+        </div>
       </div>
     </main>
   );
