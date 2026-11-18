@@ -3,152 +3,216 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://cats-world-store.vercel.app",
-    "Access-Control-Allow-Headers":
-        "authorization, x-client-info, apikey, content-type",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          };
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-          const OWNER_ID = "d6d7f71f-92e7-4caa-a3cb-b09c9590b70a";
+const OWNER_ID = "d6d7f71f-92e7-4caa-a3cb-b09c9590b70a";
 
-          const INVITE_REDIRECT =
-            "https://cats-world-store.vercel.app/admin/accept-invite";
+const INVITE_REDIRECT =
+  "https://cats-world-store.vercel.app/admin/accept-invite";
 
-            function respond(body: Record<string, unknown>, status = 200) {
-              return new Response(JSON.stringify(body), {
-                  status,
-                      headers: {
-                            ...corsHeaders,
-                                  "Content-Type": "application/json",
-                                      },
-                                        });
-                                        }
+function respond(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    },
+  });
+}
 
-                                        Deno.serve(async (req) => {
-                                          if (req.method === "OPTIONS") {
-                                              return new Response("ok", { headers: corsHeaders });
-                                                }
+// Supports the new Supabase JSON key dictionaries
+// and older plain-text environment variables.
+function getDefaultKey(raw: string | undefined): string | null {
+  if (!raw) return null;
 
-                                                  if (req.method !== "POST") {
-                                                      return respond({ error: "Method not allowed." }, 405);
-                                                        }
+  try {
+    const parsed = JSON.parse(raw);
 
-                                                          try {
-                                                              const authHeader = req.headers.get("Authorization");
+    if (typeof parsed === "string") {
+      return parsed;
+    }
 
-                                                                  if (!authHeader?.startsWith("Bearer ")) {
-                                                                        return respond({ error: "Unauthorized." }, 401);
-                                                                            }
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.default === "string"
+    ) {
+      return parsed.default;
+    }
 
-                                                                                const supabaseUrl = Deno.env.get("SUPABASE_URL");
-                                                                                    const anonKey =
-                                                                                          Deno.env.get("SUPABASE_ANON_KEY") ??
-                                                                                                Deno.env.get("SUPABASE_ANON_KEY_DEPRECATED");
+    return null;
+  } catch {
+    return raw;
+  }
+}
 
-                                                                                                    const serviceRoleKey =
-                                                                                                          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-                                                                                                                Deno.env.get("SUPABASE_SERVICE_ROLE_KEY_DEPRECATED");
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
-                                                                                                                    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-                                                                                                                          return respond({ error: "Server configuration is missing." }, 500);
-                                                                                                                              }
+  if (req.method !== "POST") {
+    return respond({ error: "Method not allowed." }, 405);
+  }
 
-                                                                                                                                  const authClient = createClient(supabaseUrl, anonKey, {
-                                                                                                                                        global: {
-                                                                                                                                                headers: { Authorization: authHeader },
-                                                                                                                                                      },
-                                                                                                                                                            auth: {
-                                                                                                                                                                    persistSession: false,
-                                                                                                                                                                            autoRefreshToken: false,
-                                                                                                                                                                                  },
-                                                                                                                                                                                      });
+  try {
+    const authHeader = req.headers.get("Authorization");
 
-                                                                                                                                                                                          const {
-                                                                                                                                                                                                data: { user: owner },
-                                                                                                                                                                                                      error: authError,
-                                                                                                                                                                                                          } = await authClient.auth.getUser();
+    if (!authHeader?.startsWith("Bearer ")) {
+      return respond({ error: "Unauthorized." }, 401);
+    }
 
-                                                                                                                                                                                                              if (authError || !owner) {
-                                                                                                                                                                                                                    return respond({ error: "Invalid login session." }, 401);
-                                                                                                                                                                                                                        }
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
 
-                                                                                                                                                                                                                            if (owner.id !== OWNER_ID) {
-                                                                                                                                                                                                                                  return respond(
-                                                                                                                                                                                                                                          { error: "Only the store owner can invite staff." },
-                                                                                                                                                                                                                                                  403
-                                                                                                                                                                                                                                                        );
-                                                                                                                                                                                                                                                            }
+    const anonKey =
+      getDefaultKey(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")) ??
+      Deno.env.get("SUPABASE_ANON_KEY");
 
-                                                                                                                                                                                                                                                                let body: { email?: string; role?: string };
+    const serviceRoleKey =
+      getDefaultKey(Deno.env.get("SUPABASE_SECRET_KEYS")) ??
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-                                                                                                                                                                                                                                                                    try {
-                                                                                                                                                                                                                                                                          body = await req.json();
-                                                                                                                                                                                                                                                                              } catch {
-                                                                                                                                                                                                                                                                                    return respond({ error: "Invalid request body." }, 400);
-                                                                                                                                                                                                                                                                                        }
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      console.error("Supabase URL or required API key is missing.");
+      return respond(
+        { error: "Required Supabase keys are missing." },
+        500
+      );
+    }
 
-                                                                                                                                                                                                                                                                                            const email = body.email?.trim().toLowerCase();
-                                                                                                                                                                                                                                                                                                const role = body.role;
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
-                                                                                                                                                                                                                                                                                                    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                                                                                                                                                                                                                                                                                                          return respond({ error: "Please enter a valid email address." }, 400);
-                                                                                                                                                                                                                                                                                                              }
+    const {
+      data: { user: owner },
+      error: authError,
+    } = await authClient.auth.getUser();
 
-                                                                                                                                                                                                                                                                                                                  if (!["full_admin", "manager", "moderator"].includes(role ?? "")) {
-                                                                                                                                                                                                                                                                                                                        return respond({ error: "Invalid staff role." }, 400);
-                                                                                                                                                                                                                                                                                                                            }
+    if (authError || !owner) {
+      return respond({ error: "Invalid login session." }, 401);
+    }
 
-                                                                                                                                                                                                                                                                                                                                const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-                                                                                                                                                                                                                                                                                                                                      auth: {
-                                                                                                                                                                                                                                                                                                                                              persistSession: false,
-                                                                                                                                                                                                                                                                                                                                                      autoRefreshToken: false,
-                                                                                                                                                                                                                                                                                                                                                            },
-                                                                                                                                                                                                                                                                                                                                                                });
+    if (owner.id !== OWNER_ID) {
+      return respond(
+        { error: "Only the store owner can invite staff." },
+        403
+      );
+    }
 
-                                                                                                                                                                                                                                                                                                                                                                    const { data: invitation, error: inviteError } =
-                                                                                                                                                                                                                                                                                                                                                                          await adminClient.auth.admin.inviteUserByEmail(email, {
-                                                                                                                                                                                                                                                                                                                                                                                  redirectTo: INVITE_REDIRECT,
-                                                                                                                                                                                                                                                                                                                                                                                        });
+    let body: { email?: unknown; role?: unknown };
 
-                                                                                                                                                                                                                                                                                                                                                                                            if (inviteError || !invitation.user) {
-                                                                                                                                                                                                                                                                                                                                                                                                  return respond(
-                                                                                                                                                                                                                                                                                                                                                                                                          { error: inviteError?.message || "Invitation failed." },
-                                                                                                                                                                                                                                                                                                                                                                                                                  400
-                                                                                                                                                                                                                                                                                                                                                                                                                        );
-                                                                                                                                                                                                                                                                                                                                                                                                                            }
+    try {
+      body = await req.json();
+    } catch {
+      return respond({ error: "Invalid request body." }, 400);
+    }
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                const { error: insertError } = await adminClient
-                                                                                                                                                                                                                                                                                                                                                                                                                                      .from("staff_roles")
-                                                                                                                                                                                                                                                                                                                                                                                                                                            .insert({
-                                                                                                                                                                                                                                                                                                                                                                                                                                                    user_id: invitation.user.id,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                            role,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                    created_by: owner.id,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                          });
+    if (!body || typeof body !== "object") {
+      return respond({ error: "Invalid request body." }, 400);
+    }
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                              if (insertError) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    await adminClient.auth.admin.deleteUser(invitation.user.id);
+    const email =
+      typeof body.email === "string"
+        ? body.email.trim().toLowerCase()
+        : "";
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          return respond(
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  { error: insertError.message || "Could not save staff role." },
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          400
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                );
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }
+    const role = body.role;
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        return respond({
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              success: true,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    message: "Staff invitation sent successfully.",
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          email,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                role,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    });
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      } catch (error) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          return respond(
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        error:
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  error instanceof Error
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ? error.message
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          : "An unexpected server error occurred.",
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                },
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      500
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          );
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            });
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return respond(
+        { error: "Please enter a valid email address." },
+        400
+      );
+    }
+
+    if (
+      !["full_admin", "manager", "moderator"].includes(
+        typeof role === "string" ? role : ""
+      )
+    ) {
+      return respond({ error: "Invalid staff role." }, 400);
+    }
+    
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    const { data: invitation, error: inviteError } =
+      await adminClient.auth.admin.inviteUserByEmail(email, {
+        redirectTo: INVITE_REDIRECT,
+      });
+
+    if (inviteError || !invitation?.user) {
+      console.error("Staff invitation failed:", inviteError);
+
+      return respond(
+        {
+          error: inviteError?.message || "Invitation failed.",
+        },
+        400
+      );
+    }
+
+    const { error: insertError } = await adminClient
+      .from("staff_roles")
+      .insert({
+        user_id: invitation.user.id,
+        role,
+        created_by: owner.id,
+      });
+
+    if (insertError) {
+      console.error("Staff role insert failed:", insertError);
+
+      const { error: deleteError } =
+        await adminClient.auth.admin.deleteUser(
+          invitation.user.id
+        );
+
+      if (deleteError) {
+        console.error("Invitation rollback failed:", deleteError);
+      }
+
+      return respond(
+        {
+          error:
+            insertError.message || "Could not save staff role.",
+        },
+        400
+      );
+    }
+
+    return respond({
+      success: true,
+      message: "Staff invitation sent successfully.",
+      email,
+      role,
+    });
+  } catch (error) {
+    console.error("Invite staff function error:", error);
+
+    return respond(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "An unexpected server error occurred.",
+      },
+      500
+    );
+  }
+});
+          
